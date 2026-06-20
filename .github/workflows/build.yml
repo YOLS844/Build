@@ -1,0 +1,46 @@
+name: Build Android APK & Send to Telegram
+
+on:
+  repository_dispatch:
+    types: [trigger_build]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Unzip base.zip
+      run: |
+        unzip -o base.zip -d project_folder
+        cp -r project_folder/* .
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      continue-on-error: true
+
+    - name: Build APK
+      run: ./gradlew assembleDebug
+      continue-on-error: true
+
+    - name: Send APK to Telegram
+      run: |
+        # Mencari file APK hasil build
+        APK_PATH=$(find . -name "*.apk" | head -n 1)
+        if [ -f "$APK_PATH" ]; then
+          curl -F chat_id="${{ github.event.client_payload.tele_id }}" \
+               -F document=@"$APK_PATH" \
+               -F caption=" Build Aplikasi Berhasil dari Website!" \
+               https://telegram.org{{ github.event.client_payload.tele_token }}/sendDocument
+        else
+          curl -X POST https://telegram.org{{ github.event.client_payload.tele_token }}/sendMessage \
+               -d chat_id="${{ github.event.client_payload.tele_id }}" \
+               -d text=" Gagal: File APK tidak ditemukan atau proses compile error."
+        fi
